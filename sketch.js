@@ -1,333 +1,286 @@
 // ============================================================
-// Side Quest Week 1: Exit 8
+// Week 2 Example 2: Platformer with Platforms Array
 // ============================================================
 
-let creepyman;
-let posterX = 25;
-let posterY = 225;
+// ------------------------------------------------------------
+// PLATFORMS ARRAY
+// Each platform is an object with x, y, width, and height.
+// x and y are the TOP-LEFT corner (same as rect()).
+//
+// Storing platforms in an array means:
+//   - We can loop through all of them with one for loop
+//   - Adding a new platform = adding one line of data
+//   - Later we can load this data from a JSON file instead
+// ------------------------------------------------------------
+let platforms = [
+  // { x, y, w, h }
+  { x: 0, y: 410, w: 800, h: 40 }, // ground (full width floor)
+  { x: 80, y: 310, w: 120, h: 16 }, // left low platform
+  { x: 280, y: 240, w: 140, h: 16 }, // centre platform
+  { x: 500, y: 170, w: 120, h: 16 }, // right high platform
+  { x: 160, y: 150, w: 100, h: 16 }, // left high platform
+  { x: 360, y: 320, w: 110, h: 16 }, // centre low platform
+  { x: 620, y: 290, w: 130, h: 16 }, // far right platform
+];
 
-/**
- * Preloads assets before the sketch starts.
- */
+let celesteBackground;
+
 function preload() {
-  creepyman = loadImage("assets/images/creepyman.png");
+  celesteBackground = loadImage("assets/images/celesteBackground.png");
 }
 
-/**
- * Sets up the canvas and draws the initial static scene.
- */
+// ------------------------------------------------------------
+// PLAYER OBJECT — same structure as Example 1
+// w and h are added here for use in collision detection.
+// ------------------------------------------------------------
+let player = {
+  x: 100,
+  y: 100,
+
+  vx: 0, // horizontal velocity
+  vy: 0, // vertical velocity
+
+  r: 20, // visual radius for blob drawing and collision
+
+  // Movement tuning — change these to adjust how the game feels
+  speed: 0.55, // horizontal acceleration per frame
+  maxSpeed: 4.5, // maximum horizontal speed
+  jumpForce: -12, // upward velocity applied when jumping (negative = upward)
+  friction: 0.78, // horizontal slowdown when no key is pressed (0–1, lower = more friction)
+
+  onGround: false, // tracks whether the player is standing on something
+};
+
+// ------------------------------------------------------------
+// PHYSICS CONSTANTS
+// Defined outside the player object so they can be shared
+// across multiple objects (e.g. enemies)
+// ------------------------------------------------------------
+const GRAVITY = 0.6; // downward force added to vy every frame
+
+// Blob animation time — increases each frame to animate the wobble
+let blobT = 0;
+
+// Platform colour stored as an array so it can be reused easily
+const PLATFORM_COLOR = [255, 160, 50]; // warm orange
+
+// ============================================================
+// setup()
+// Runs once at the very start of the sketch.
+// Sets up the canvas and positions the player on the ground.
+// ============================================================
 function setup() {
-  // Create a canvas for the static image.
-  createCanvas(600, 800);
-  // Set the background to an underground tiled passage style.
-  drawBackWall();
-  drawCeiling();
-  drawFloor();
-  drawWalls();
-  drawPosters(posterX, posterY);
-  drawSign(300, 100);
-  imageMode(CENTER);
-  image(creepyman, width / 2, 450, 1200, 1200);
+  createCanvas(800, 450);
+
+  // Place player on top of the ground platform (index 0 in the array)
+  player.y = platforms[0].y - player.r;
 }
 
-/**
- * The main draw loop (empty for static image).
- */
-function draw() {}
+// ============================================================
+// draw()
+// Runs repeatedly in a loop after setup() finishes.
+// Each frame we clear the background, handle input,
+// apply physics, resolve collisions, and draw everything.
+// ============================================================
+function draw() {
+  Image(celesteBackground, 0, 0, width, height);
 
-/**
- * Draws an eye at the mouse click position when clicked.
- */
-function mouseClicked() {
-  drawEye();
+  handleInput();
+  applyPhysics();
+  resolvePlatformCollisions();
+
+  drawPlatforms();
+  drawPlayer();
+  drawHUD();
+
+  blobT += 0.015; // advance blob wobble animation each frame
 }
 
-/**
- * Draws the central exit sign with posts, arrow, text, and the large '8'.
- * @param {number} x - The x-coordinate of the sign center.
- * @param {number} y - The y-coordinate of the sign center.
- */
-function drawSign(x, y) {
-  rectMode(CENTER);
+// ------------------------------------------------------------
+// handleInput()
+// Checks which keys are held down this frame and updates
+// the player's velocity accordingly.
+// keyIsDown() returns true as long as the key is held —
+// unlike keyPressed(), which only fires once per press.
+// We check both arrow keys and WASD so either works.
+// ------------------------------------------------------------
+function handleInput() {
+  // --- Horizontal movement ---
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
+    // LEFT or A
+    player.vx -= player.speed;
+  }
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
+    // RIGHT or D
+    player.vx += player.speed;
+  }
 
-  // Hanging posts (drawn first to appear behind the sign)
-  push();
-  fill(200); // 200 colored (light gray)
-  stroke(150); // Slightly darker outline for depth
-  strokeWeight(2);
-  // Left post: x - 150, centered higher up to act as a hanger
-  rect(x - 150, y - 125, 15, 200);
-  // Right post: x + 150
-  rect(x + 150, y - 125, 15, 200);
-  pop();
+  // --- Clamp horizontal speed ---
+  // constrain(value, min, max) keeps a value within a range.
+  // Without this, holding a key forever would accelerate infinitely.
+  player.vx = constrain(player.vx, -player.maxSpeed, player.maxSpeed);
 
-  // Main Sign Box
-  fill(255, 255, 0);
-  strokeWeight(5);
-  stroke(200);
-  rect(x, y, 400, 100);
-  strokeWeight(1);
+  // --- Apply friction when no horizontal key is pressed ---
+  // Multiplying by a value less than 1 gradually slows the player down.
+  if (
+    !keyIsDown(LEFT_ARROW) &&
+    !keyIsDown(65) &&
+    !keyIsDown(RIGHT_ARROW) &&
+    !keyIsDown(68)
+  ) {
+    player.vx *= player.friction;
+  }
 
-  // Big bold arrow pointing up (Left side)
-  push();
-  fill(0);
-  noStroke();
-  let ax = x - 70; // X center of the arrow
-  let ay = y; // Y center of the arrow
-  beginShape();
-  vertex(ax, ay - 33); // Top tip
-  vertex(ax - 25, ay + 5); // Left wing
-  vertex(ax - 15, ay + 5); // Inner left lip
-  vertex(ax - 5, ay + -13); // Inner left corner
-  vertex(ax - 5, ay + 35); // Bottom left
-  vertex(ax + 5, ay + 35); // Bottom right
-  vertex(ax + 5, ay + -13); // Inner right corner
-  vertex(ax + 15, ay + 5); // Inner right lip
-  vertex(ax + 25, ay + 5); // Right wing
-  endShape(CLOSE);
-  pop();
-
-  // Text (Center)
-  textAlign(CENTER);
-  stroke(0);
-  fill(0);
-  textSize(30);
-  text("出口", x, y);
-  textSize(20);
-  text("Exit", x - 10, y + 25);
-
-  // Large 8 (Right side)
-  push();
-  textAlign(CENTER, CENTER);
-  fill(0);
-  stroke(0);
-  strokeWeight(3); // Makes the 8 extra bold
-  textSize(90);
-  text("8", x + 70, y + 5);
-  pop();
+  // --- Jump ---
+  // The player can only jump when standing on the ground (onGround = true).
+  // This prevents jumping again mid-air.
+  if ((keyIsDown(UP_ARROW) || keyIsDown(87)) && player.onGround) {
+    // UP or W
+    player.vy = player.jumpForce;
+    player.onGround = false;
+  }
 }
 
-/**
- * Draws an underground tiled wall background.
- */
-function drawBackWall() {
-  background(220); // Dark, industrial color for the main tunnel.
+// ------------------------------------------------------------
+// applyPhysics()
+// Each frame we:
+//   1. Add gravity to vertical velocity (vy)
+//   2. Move the player by its velocity (vx, vy)
+//   3. Reset onGround so collision can set it again
+//   4. Handle falling off the bottom of the canvas
+// ------------------------------------------------------------
+function applyPhysics() {
+  // 1. Apply gravity — pulls the player down every frame
+  player.vy += GRAVITY;
 
-  // Draw wall tiles (square grid).
-  stroke(60, 60, 60);
-  strokeWeight(1);
-  noFill();
-  let tileSize = 10;
-  for (let x = 0; x < width; x += tileSize) {
-    for (let y = 0; y < height; y += tileSize) {
-      rect(x, y, tileSize, tileSize);
+  // 2. Move player by its current velocity
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // 3. Keep player inside canvas horizontally
+  player.x = constrain(player.x, player.r, width - player.r);
+
+  // 4. If player falls below the canvas, reset to start position
+  if (player.y > height + 100) {
+    player.x = 100;
+    player.y = platforms[0].y - player.r;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  // Assume in the air until collision check says otherwise
+  player.onGround = false;
+}
+
+// ------------------------------------------------------------
+// resolvePlatformCollisions()
+// Loops through every platform and checks if the player
+// is landing on top of it.
+//
+// The collision check asks three questions:
+//   1. Is the player horizontally overlapping the platform?
+//   2. Is the player falling downward (vy >= 0)?
+//   3. Is the player's bottom at or below the platform top?
+//
+// If all three are true, we snap the player to sit on top.
+// This top-only check means the player can jump through
+// platforms from below, which is a common platformer pattern.
+// ------------------------------------------------------------
+function resolvePlatformCollisions() {
+  for (let i = 0; i < platforms.length; i++) {
+    let p = platforms[i];
+
+    // Player's bounding box edges
+    let playerLeft = player.x - player.r;
+    let playerRight = player.x + player.r;
+    let playerBottom = player.y + player.r;
+
+    // Platform edges
+    let platLeft = p.x;
+    let platRight = p.x + p.w;
+    let platTop = p.y;
+
+    // 1. Check horizontal overlap
+    let overlapsHorizontally = playerRight > platLeft && playerLeft < platRight;
+
+    // 2 & 3. Check if landing on top (falling down onto the platform surface)
+    // The small tolerance (+ 20) prevents the player clipping through
+    // fast-moving platforms or getting stuck on edges.
+    let landingOnTop =
+      player.vy >= 0 && playerBottom >= platTop && playerBottom <= platTop + 20;
+
+    if (overlapsHorizontally && landingOnTop) {
+      player.y = platTop - player.r; // snap to platform surface
+      player.vy = 0; // stop falling
+      player.onGround = true; // allow jumping again
     }
   }
 }
 
-/**
- * Draws an eye anomaly at the mouse click position.
- */
-function drawEye() {
-  let anomalyX = mouseX;
-  let anomalyY = mouseY;
-  let anomalyD = 40;
-
-  fill(255); // White of the eye
-  strokeWeight(1);
-  stroke(255, 0, 0);
-  ellipse(anomalyX, anomalyY, anomalyD * 1.5, anomalyD);
-
+// ------------------------------------------------------------
+// drawPlatforms()
+// Loops through the platforms array and draws each one.
+// This is the same loop pattern used to draw any collection
+// of objects — enemies, coins, tiles, etc.
+// ------------------------------------------------------------
+function drawPlatforms() {
+  fill(PLATFORM_COLOR[0], PLATFORM_COLOR[1], PLATFORM_COLOR[2]);
   noStroke();
-  fill(0); // Pupil
-  ellipse(anomalyX, anomalyY, anomalyD, anomalyD);
 
-  fill(255); // Reflection
-  ellipse(
-    anomalyX - anomalyD * 0.15,
-    anomalyY - anomalyD * 0.15,
-    anomalyD * 0.2,
-    anomalyD * 0.2,
-  );
+  for (let i = 0; i < platforms.length; i++) {
+    let p = platforms[i];
+    rect(p.x, p.y, p.w, p.h, 6); // rounded corners
+  }
 }
 
-/**
- * Draws the ceiling as an upside-down trapezoid for perspective.
- */
-function drawCeiling() {
-  push();
-  // Light grey color for the ceiling
+// ------------------------------------------------------------
+// drawPlayer()
+// The blob is drawn as a polygon using noise() to offset
+// each vertex slightly, creating an organic wobble effect.
+// push() and pop() save and restore drawing settings so
+// styles set here don't affect other drawing functions.
+// ------------------------------------------------------------
+function drawPlayer() {
+  push(); // save current drawing settings
+
+  fill(0, 200, 180); // teal
+  noStroke();
+
+  beginShape();
+  let numPoints = 48; // more points = smoother shape
+  for (let i = 0; i < numPoints; i++) {
+    let angle = (TWO_PI / numPoints) * i;
+
+    // noise() returns a smooth random value between 0 and 1.
+    // We use it to push each vertex in or out slightly.
+    let noiseVal = noise(cos(angle) * 0.8 + blobT, sin(angle) * 0.8 + blobT);
+
+    // map() converts noise (0–1) to a radius offset (-7 to +7 pixels)
+    let r = player.r + map(noiseVal, 0, 1, -7, 7);
+
+    // Convert polar coordinates (angle, radius) to x/y
+    vertex(player.x + cos(angle) * r, player.y + sin(angle) * r);
+  }
+  endShape(CLOSE);
+
+  // Draw two simple eyes
+  fill(10);
+  ellipse(player.x - 7, player.y - 5, 7, 7);
+  ellipse(player.x + 7, player.y - 5, 7, 7);
+
+  pop(); // restore drawing settings
+}
+
+// ------------------------------------------------------------
+// drawHUD()
+// HUD = Heads Up Display.
+// Shows controls on screen so the player always knows
+// how to interact without needing external instructions.
+// ------------------------------------------------------------
+function drawHUD() {
   fill(180);
-  stroke(150); // Slightly darker border for the edges
-  strokeWeight(2);
-
-  // Define the coordinates for the upside-down trapezoid
-  // quad(x1, y1, x2, y2, x3, y3, x4, y4);
-  let topLeftX = 0;
-  let topLeftY = 0;
-
-  let topRightX = width;
-  let topRightY = 0;
-
-  // Adjust these to change the depth/perspective of the ceiling
-  let ceilingDepthY = 325;
-  let bottomRightX = width * 0.6;
-  let bottomLeftX = width * 0.4;
-
-  quad(
-    topLeftX,
-    topLeftY, // Top-left corner
-    topRightX,
-    topRightY, // Top-right corner
-    bottomRightX,
-    ceilingDepthY, // Bottom-right corner (narrower, lower down)
-    bottomLeftX,
-    ceilingDepthY, // Bottom-left corner (narrower, lower down)
-  );
-  pop();
-}
-
-/**
- * Draws the floor as a trapezoid for perspective, contrasting the ceiling.
- */
-function drawFloor() {
-  push();
-  // Slightly darker grey color for the floor to contrast with the ceiling
-  fill(235);
-  stroke(150);
-  strokeWeight(2);
-
-  // Define the bottom corners of the canvas
-  let bottomLeftX = 0;
-  let bottomLeftY = height;
-
-  let bottomRightX = width;
-  let bottomRightY = height;
-
-  // Set the depth of the floor (how high up the screen it goes)
-  // You can match the 300 from the ceiling, or adjust it based on your canvas height
-  let floorDepthY = height - 320;
-
-  // Match the perspective angles of the ceiling
-  let topRightX = width * 0.6;
-  let topLeftX = width * 0.4;
-
-  // quad(x1, y1, x2, y2, x3, y3, x4, y4);
-  quad(
-    bottomLeftX,
-    bottomLeftY, // Bottom-left corner
-    bottomRightX,
-    bottomRightY, // Bottom-right corner
-    topRightX,
-    floorDepthY, // Top-right corner (narrower, higher up)
-    topLeftX,
-    floorDepthY, // Top-left corner (narrower, higher up)
-  );
-
-  pop();
-}
-
-/**
- * Draws the left and right walls with perspective lines for 3D depth.
- */
-function drawWalls() {
-  push();
-  fill(240); // White walls
-  stroke(20); // Black for tile grout
-  strokeWeight(1);
-
-  // Perspective anchor points (matching your ceiling and floor)
-  let backLeftX = width * 0.4;
-  let backRightX = width * 0.6;
-  let backTopY = 300;
-  let backBottomY = height - 300;
-
-  // 1. Draw the base trapezoids (quads) for both walls
-  // Left Wall
-  quad(0, 0, backLeftX, backTopY, backLeftX, backBottomY, 0, height);
-  // Right Wall
-  quad(width, 0, backRightX, backTopY, backRightX, backBottomY, width, height);
-
-  // 2. Draw horizontal lines (Radiating from the vanishing point)
-  let numRows = 12; // Lowered this to make the vertical gaps larger (taller tiles)
-
-  for (let i = 0; i <= numRows; i++) {
-    // Front edge Y coordinates (0 to height)
-    let frontY = map(i, 0, numRows, 0, height);
-    // Back edge Y coordinates (compressed to the back wall)
-    let backY = map(i, 0, numRows, backTopY, backBottomY);
-
-    // Left wall lines
-    line(0, frontY, backLeftX, backY);
-    // Right wall lines
-    line(width, frontY, backRightX, backY);
-  }
-
-  // 3. Draw vertical lines (Compressing towards the back for 3D depth)
-  let numCols = 12; // Increased this to shorten the horizontal gaps (narrower tiles)
-
-  for (let i = 1; i < numCols; i++) {
-    // t goes evenly from 0 (front) to 1 (back)
-    let t = i / numCols;
-
-    // We use a math curve to squish the lines together as t gets closer to 1
-    let depthT = 1 - pow(1 - t, 2);
-
-    // Left Wall vertical lines
-    let leftX = map(depthT, 0, 1, 0, backLeftX);
-    let leftTopY = map(depthT, 0, 1, 0, backTopY);
-    let leftBottomY = map(depthT, 0, 1, height, backBottomY);
-    line(leftX, leftTopY, leftX, leftBottomY);
-
-    // Right Wall vertical lines
-    let rightX = map(depthT, 0, 1, width, backRightX);
-    let rightTopY = map(depthT, 0, 1, 0, backTopY);
-    let rightBottomY = map(depthT, 0, 1, height, backBottomY);
-    line(rightX, rightTopY, rightX, rightBottomY);
-  }
-
-  pop();
-}
-
-/**
- * Draws two posters on the left wall at the specified position.
- * @param {number} x - The x-coordinate for the first poster.
- * @param {number} y - The y-coordinate for the posters.
- */
-function drawPosters(x, y) {
-  push();
   noStroke();
-
-  let posterWidth = 100;
-  let posterHeight = 300;
-  let gap = 20;
-
-  // First poster on the left wall.
-  fill(254, 83, 77);
-  quad(
-    x,
-    y,
-    x + posterWidth,
-    y + 45,
-    x + posterWidth,
-    y + posterHeight - 40,
-    x,
-    y + posterHeight,
-  );
-
-  // Second poster to the right of the first.
-  let secondX = x + posterWidth + gap;
-  fill(20, 158, 200);
-  quad(
-    secondX,
-    y + 50,
-    secondX + posterWidth / 2,
-    y + 90,
-    secondX + posterWidth / 2,
-    y + posterHeight - 75,
-    secondX,
-    y + posterHeight - 50,
-  );
-
-  pop();
+  textSize(13);
+  textAlign(LEFT);
+  text("Move: Arrow Keys or WASD   Jump: W or Up Arrow", 16, 24);
 }

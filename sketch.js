@@ -24,12 +24,24 @@ let platforms = [
 ];
 
 let celesteBackground;
+let kiwi;
 
 function preload() {
   celesteBackground = loadImage("assets/images/celesteBackground.png");
+  kiwi = loadImage("assets/images/kiwi.png");
 }
 
 // ------------------------------------------------------------
+// SPIKE CONFIG
+// Spikes live on the top of a platform (index below) and
+// will kill the player on contact, forcing a respawn.
+// ------------------------------------------------------------
+const SPIKE_PLATFORM_INDEX = 3; // top-right platform in platforms[]
+const SPIKE_HEIGHT = 14;
+const SPIKE_WIDTH = 20;
+const SPIKE_COLOR = [175, 10, 10];
+
+// ------------------------------------------------ ------------
 // PLAYER OBJECT — same structure as Example 1
 // w and h are added here for use in collision detection.
 // ------------------------------------------------------------
@@ -40,7 +52,8 @@ let player = {
   vx: 0, // horizontal velocity
   vy: 0, // vertical velocity
 
-  r: 20, // visual radius for blob drawing and collision
+  r: 20, // visual radius for collision
+  facing: -1, // 1 = right, -1 = left
 
   // Movement tuning — change these to adjust how the game feels
   speed: 0.55, // horizontal acceleration per frame
@@ -83,7 +96,7 @@ function setup() {
 // apply physics, resolve collisions, and draw everything.
 // ============================================================
 function draw() {
-  Image(celesteBackground, 0, 0, width, height);
+  image(celesteBackground, 0, 0, width, height);
 
   handleInput();
   applyPhysics();
@@ -109,10 +122,12 @@ function handleInput() {
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
     // LEFT or A
     player.vx -= player.speed;
+    player.facing = 1;
   }
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
     // RIGHT or D
     player.vx += player.speed;
+    player.facing = -1;
   }
 
   // --- Clamp horizontal speed ---
@@ -172,6 +187,14 @@ function applyPhysics() {
   player.onGround = false;
 }
 
+function killPlayer() {
+  // Respawn on the ground (bottom) at the start position
+  player.x = 100;
+  player.y = platforms[0].y - player.r;
+  player.vx = 0;
+  player.vy = 0;
+}
+
 // ------------------------------------------------------------
 // resolvePlatformCollisions()
 // Loops through every platform and checks if the player
@@ -203,6 +226,35 @@ function resolvePlatformCollisions() {
     // 1. Check horizontal overlap
     let overlapsHorizontally = playerRight > platLeft && playerLeft < platRight;
 
+    // --- Spike collision checks (kills player) ---
+    if (i === SPIKE_PLATFORM_INDEX) {
+      let spikeTop = platTop - SPIKE_HEIGHT;
+      let platBottom = platTop + p.h;
+      let playerTop = player.y - player.r;
+
+      // Top-facing spikes: player lands on them from above
+      if (
+        overlapsHorizontally &&
+        player.vy >= 0 &&
+        playerBottom > spikeTop &&
+        playerBottom <= platTop + 20
+      ) {
+        killPlayer();
+        return;
+      }
+
+      // Bottom-facing spikes: player hits them from below when moving upward
+      if (
+        overlapsHorizontally &&
+        player.vy <= 0 &&
+        playerTop < platBottom + SPIKE_HEIGHT &&
+        playerTop >= platBottom - 20
+      ) {
+        killPlayer();
+        return;
+      }
+    }
+
     // 2 & 3. Check if landing on top (falling down onto the platform surface)
     // The small tolerance (+ 20) prevents the player clipping through
     // fast-moving platforms or getting stuck on edges.
@@ -230,6 +282,30 @@ function drawPlatforms() {
   for (let i = 0; i < platforms.length; i++) {
     let p = platforms[i];
     rect(p.x, p.y, p.w, p.h, 6); // rounded corners
+
+    // Draw spikes on the configured platform
+    if (i === SPIKE_PLATFORM_INDEX) {
+      push();
+      fill(SPIKE_COLOR[0], SPIKE_COLOR[1], SPIKE_COLOR[2]);
+      noStroke();
+      let spikeW = SPIKE_WIDTH;
+      for (let sx = p.x; sx < p.x + p.w; sx += spikeW) {
+        let x1 = sx;
+        let x2 = min(sx + spikeW / 2, p.x + p.w);
+        let x3 = min(sx + spikeW, p.x + p.w);
+        // Top-facing spike
+        triangle(x1, p.y, x2, p.y - SPIKE_HEIGHT, x3, p.y);
+      }
+
+      // Bottom-facing spikes (pointing downward)
+      for (let sx = p.x; sx < p.x + p.w; sx += spikeW) {
+        let x1 = sx;
+        let x2 = min(sx + spikeW / 2, p.x + p.w);
+        let x3 = min(sx + spikeW, p.x + p.w);
+        triangle(x1, p.y + p.h, x2, p.y + p.h + SPIKE_HEIGHT, x3, p.y + p.h);
+      }
+      pop();
+    }
   }
 }
 
@@ -243,30 +319,10 @@ function drawPlatforms() {
 function drawPlayer() {
   push(); // save current drawing settings
 
-  fill(0, 200, 180); // teal
-  noStroke();
-
-  beginShape();
-  let numPoints = 48; // more points = smoother shape
-  for (let i = 0; i < numPoints; i++) {
-    let angle = (TWO_PI / numPoints) * i;
-
-    // noise() returns a smooth random value between 0 and 1.
-    // We use it to push each vertex in or out slightly.
-    let noiseVal = noise(cos(angle) * 0.8 + blobT, sin(angle) * 0.8 + blobT);
-
-    // map() converts noise (0–1) to a radius offset (-7 to +7 pixels)
-    let r = player.r + map(noiseVal, 0, 1, -7, 7);
-
-    // Convert polar coordinates (angle, radius) to x/y
-    vertex(player.x + cos(angle) * r, player.y + sin(angle) * r);
-  }
-  endShape(CLOSE);
-
-  // Draw two simple eyes
-  fill(10);
-  ellipse(player.x - 7, player.y - 5, 7, 7);
-  ellipse(player.x + 7, player.y - 5, 7, 7);
+  translate(player.x, player.y);
+  scale(player.facing, 1);
+  imageMode(CENTER);
+  image(kiwi, 0, 0, player.r * 2.8, player.r * 2.8);
 
   pop(); // restore drawing settings
 }

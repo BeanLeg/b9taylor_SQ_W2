@@ -19,7 +19,10 @@ To run the sketch locally, open `index.html` in Google Chrome using Live Server.
 ## Assets
 
 celesteBackground.png | https://www.reddit.com/r/celestegame/comments/11dtgwg/all_most_of_the_backgrounds_in_celeste_edited/ [1]
+kiwi.png | https://pngtree.com/freepng/hand-drawn-cute-kiwi-bird_4265464.html [2]
 
 ## References
 
 [1] FeelingRiddled. 2023.(2023). Retrieved May 20, 2026 from https://www.reddit.com/r/celestegame/comments/11dtgwg/all_most_of_the_backgrounds_in_celeste_edited/
+
+[2] 123456A. Hand Drawn Cute Kiwi Bird Hd Transparent. Retrieved May 21, 2026 from https://pl.pngtree.com/freepng/hand-drawn-cute-kiwi-bird_4265464.html

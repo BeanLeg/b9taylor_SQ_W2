@@ -18,8 +18,10 @@ To run the sketch locally, open `index.html` in Google Chrome using Live Server.
 
 ## Assets
 
-celesteBackground.png | https://www.reddit.com/r/celestegame/comments/11dtgwg/all_most_of_the_backgrounds_in_celeste_edited/ [1]
-kiwi.png | https://pngtree.com/freepng/hand-drawn-cute-kiwi-bird_4265464.html [2]
+| File                  | Source                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| celesteBackground.png | https://www.reddit.com/r/celestegame/comments/11dtgwg/all_most_of_the_backgrounds_in_celeste_edited/ [1] |
+| kiwi.png              | https://pngtree.com/freepng/hand-drawn-cute-kiwi-bird_4265464.html [2]                                   |
 
 ## References
 
